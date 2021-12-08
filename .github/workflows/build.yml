@@ -14,5 +14,4 @@ jobs:
       run: go build
     - uses: actions/upload-artifact@v2
       with:
-        name: "vega-exporter"
-        path: output/linux-amd64/
+        name: "vega-prometheus-exporter"
