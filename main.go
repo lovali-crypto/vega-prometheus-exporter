@@ -184,10 +184,82 @@ type VegaConsensus struct {
 	} `json:"result"`
 }
 
+type VegaNetInfo struct {
+	Jsonrpc string `json:"jsonrpc"`
+	ID      int    `json:"id"`
+	Result  struct {
+		Listening bool     `json:"listening"`
+		Listeners []string `json:"listeners"`
+		NPeers    string   `json:"n_peers"`
+		Peers     []struct {
+			NodeInfo struct {
+				ProtocolVersion struct {
+					P2P   string `json:"p2p"`
+					Block string `json:"block"`
+					App   string `json:"app"`
+				} `json:"protocol_version"`
+				ID         string `json:"id"`
+				ListenAddr string `json:"listen_addr"`
+				Network    string `json:"network"`
+				Version    string `json:"version"`
+				Channels   string `json:"channels"`
+				Moniker    string `json:"moniker"`
+				Other      struct {
+					TxIndex    string `json:"tx_index"`
+					RPCAddress string `json:"rpc_address"`
+				} `json:"other"`
+			} `json:"node_info"`
+			IsOutbound       bool `json:"is_outbound"`
+			ConnectionStatus struct {
+				Duration    string `json:"Duration"`
+				SendMonitor struct {
+					Start    time.Time `json:"Start"`
+					Bytes    string    `json:"Bytes"`
+					Samples  string    `json:"Samples"`
+					InstRate string    `json:"InstRate"`
+					CurRate  string    `json:"CurRate"`
+					AvgRate  string    `json:"AvgRate"`
+					PeakRate string    `json:"PeakRate"`
+					BytesRem string    `json:"BytesRem"`
+					Duration string    `json:"Duration"`
+					Idle     string    `json:"Idle"`
+					TimeRem  string    `json:"TimeRem"`
+					Progress int       `json:"Progress"`
+					Active   bool      `json:"Active"`
+				} `json:"SendMonitor"`
+				RecvMonitor struct {
+					Start    time.Time `json:"Start"`
+					Bytes    string    `json:"Bytes"`
+					Samples  string    `json:"Samples"`
+					InstRate string    `json:"InstRate"`
+					CurRate  string    `json:"CurRate"`
+					AvgRate  string    `json:"AvgRate"`
+					PeakRate string    `json:"PeakRate"`
+					BytesRem string    `json:"BytesRem"`
+					Duration string    `json:"Duration"`
+					Idle     string    `json:"Idle"`
+					TimeRem  string    `json:"TimeRem"`
+					Progress int       `json:"Progress"`
+					Active   bool      `json:"Active"`
+				} `json:"RecvMonitor"`
+				Channels []struct {
+					ID                int    `json:"ID"`
+					SendQueueCapacity string `json:"SendQueueCapacity"`
+					SendQueueSize     string `json:"SendQueueSize"`
+					Priority          string `json:"Priority"`
+					RecentlySent      string `json:"RecentlySent"`
+				} `json:"Channels"`
+			} `json:"connection_status"`
+			RemoteIP string `json:"remote_ip"`
+		} `json:"peers"`
+	} `json:"result"`
+}
+
 const namespace = "vega"
 const vegaStatusUrl = "/status"
 const vegaConsensusUrl = "/dump_consensus_state"
 const vegaGenesisUrl = "/genesis"
+const netInfo = "/net_info"
 
 var (
 	tr = &http.Transport{
@@ -208,7 +280,7 @@ var (
 	)
 	metricCatchingUp = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "sync_cytching_up"),
-		"Is the node catching uo?",
+		"Is the node catching up?",
 		nil, nil,
 	)
 	metricValidatorSigning = prometheus.NewDesc(
@@ -296,7 +368,7 @@ func (e *Exporter) LoadVegaStatus(ch chan<- prometheus.Metric) (VegaStatus, erro
 
 func (e *Exporter) GetVegaValidators() ([]VegaValidator, error) {
 	// Get Vega genesis file
-	req, err := http.NewRequest("GET", e.vegaEndpoint+vegaGenesisUrl, nil)
+	req, err := http.NewRequest("GET", e.vegaEndpoint+netInfo, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -318,25 +390,22 @@ func (e *Exporter) GetVegaValidators() ([]VegaValidator, error) {
 	if err != nil {
 		return nil, err
 	}
-	var validators Validators
+	var validators VegaNetInfo
 	v, err := json.Marshal(result["result"])
 	err = json.Unmarshal(v, &result)
 	if err != nil {
 		return nil, err
 	}
-	v, err = json.Marshal(result["genesis"])
-	err = json.Unmarshal(v, &result)
-	v, err = json.Marshal(result["validators"])
 	json.Unmarshal(v, &validators)
 	//log.Printf("result: %+v\n", result)
 	//log.Printf("marshaled result: %+v\n", v)
 
 	var retValidators []VegaValidator
-	for _, val := range validators {
+	for _, val := range validators.Result.Peers {
 		var validator VegaValidator
-		validator.Name = val.Name
-		validator.Address = val.Address
-		validator.ShortAddress = val.Address[0:12]
+		validator.Name = val.NodeInfo.Moniker
+		validator.Address = val.NodeInfo.ID
+		validator.ShortAddress = val.NodeInfo.ID[0:12]
 		retValidators = append(retValidators, validator)
 	}
 
